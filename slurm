@@ -29,6 +29,7 @@ fmt_a_hist="jobid,jobname,start,reqmem,maxrss,totalcpu,elapsed,ntasks,alloccpus,
 fmt_a_qos="Format=Priority,Name,MaxWall,GrpCPUs,MaxCPUsPerUser"
 fmt_a_user="WithAssoc"
 fmt_top="%u|%j|%C|%m"
+fmt_topa="%a|%j|%C|%m"
 
 cmd_watch="/usr/bin/watch -n 15 --no-title"
 cmd_queue_size="squeue -S T,P,u,m,C,D,l,t -o"
@@ -64,7 +65,8 @@ Show or watch job queue:
  $self [w] [q|qq|ss|s|f] shorthands for above!
 
  $self qos               show job service classes
- $self top [queue|all]   show summary of active users
+ $self top  [queue|all]  show summary of active users
+ $self topa [queue|all]  show summary of active accounts
 
 Show detailed information about jobs:
  $self prio [all|short]  show priority components
@@ -89,6 +91,7 @@ EOF
 	cat <<EOF
 Admin commands:
  $self top
+ $self topa
  $self history 30days -u user
  $self history 1hour -a -r gpu
  $self dead
@@ -176,6 +179,9 @@ function commands {
 	    ;;	    
 	top)
 	    top_users "$2"
+	    ;;	    
+	topa)
+	    top_account "$2"
 	    ;;	    
 	steps)
 	    shift
@@ -302,6 +308,20 @@ function top_users {
     esac
     echo "      User  Jobs x Cores   Mem(GB) GB/c  Jobs"
     eval "$cmd_top '$fmt_top'" -t $state | awk -v w=$COLUMNS 'BEGIN{FS="|"}
+  {jn[$1]+=1; j[$1]=j[$1]" "$2"["$3"]"; c[$1]+=$3; ($4~/K/)?m[$1]+=$3*$4*1000:m[$1]+=$3*$4;}
+  END{for(u in c){printf "%10s %5d x %-5d %8.1f %5.1f  %s\n",
+    u,jn[u],c[u],m[u]/1024,m[u]/c[u]/1024,substr(j[u],2,w-42);}}' | sort -nrk4
+}
+
+# fmt_top="%a|%j|%C|%m"
+function top_account {
+    case $1 in
+	all)    state="R,PD,S" ;;
+	queue)  state="PENDING" ;;
+	*)      state="RUNNING" ;;
+    esac
+    echo "      Acct  Jobs x Cores   Mem(GB) GB/c  Jobs"
+    eval "$cmd_top '$fmt_topa'" -t $state | awk -v w=$COLUMNS 'BEGIN{FS="|"}
   {jn[$1]+=1; j[$1]=j[$1]" "$2"["$3"]"; c[$1]+=$3; ($4~/K/)?m[$1]+=$3*$4*1000:m[$1]+=$3*$4;}
   END{for(u in c){printf "%10s %5d x %-5d %8.1f %5.1f  %s\n",
     u,jn[u],c[u],m[u]/1024,m[u]/c[u]/1024,substr(j[u],2,w-42);}}' | sort -nrk4
